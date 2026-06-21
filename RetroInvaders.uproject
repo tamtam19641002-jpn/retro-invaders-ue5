@@ -1,0 +1,13 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.5",
+  "Category": "Games",
+  "Description": "Retro fixed-screen invader game with synthesized arcade audio.",
+  "Modules": [
+    {
+      "Name": "RetroInvaders",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
