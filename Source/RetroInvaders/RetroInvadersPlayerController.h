@@ -32,6 +32,7 @@ struct FRetroBunker
 UENUM()
 enum class ERetroGameState : uint8
 {
+    Title,
     Playing,
     Victory,
     GameOver
@@ -52,6 +53,11 @@ public:
     int32 HighScore = 0;
     int32 Lives = 3;
     int32 Wave = 1;
+    bool bUfoActive = false;
+    float UfoX = -60.0f;
+    float UfoY = 72.0f;
+    int32 LastUfoScore = 0;
+    float UfoScoreTimer = 0.0f;
     TArray<FRetroInvader> Invaders;
     TArray<FRetroBullet> Bullets;
     TArray<FRetroBunker> Bunkers;
@@ -69,6 +75,11 @@ private:
     bool bPreviousFire = false;
     bool bPreviousRestart = false;
     bool bPreviousQuit = false;
+    bool bPreviousMouse = false;
+    bool bPreviousFullscreen = false;
+    float UfoSpawnTimer = 0.0f;
+    float UfoSoundTimer = 0.0f;
+    int32 UfoSoundNote = 0;
 
     UPROPERTY()
     TArray<TObjectPtr<USoundWaveProcedural>> GeneratedSounds;
@@ -82,9 +93,12 @@ private:
     void UpdateInvaders(float DeltaTime);
     void ResolveCollisions();
     bool DamageBunkerAt(const FVector2D& HitPosition, bool bEnemyBullet);
+    void UpdateUfo(float DeltaTime);
+    void StartPlayingFromTitle();
     void PlayTone(float StartFrequency, float EndFrequency, float Duration, float Volume, bool bNoise = false);
     void PlayShotSound();
     void PlayExplosionSound();
     void PlayMarchSound();
     void PlayEnemyShotSound();
+    void PlayUfoSound();
 };

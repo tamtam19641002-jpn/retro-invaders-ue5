@@ -3,6 +3,7 @@
 #include "Sound/SoundWaveProcedural.h"
 #include "InputCoreTypes.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "GameFramework/GameUserSettings.h"
 
 namespace RetroRules
 {
@@ -20,9 +21,12 @@ ARetroInvadersPlayerController::ARetroInvadersPlayerController()
 void ARetroInvadersPlayerController::BeginPlay()
 {
     Super::BeginPlay();
-    FInputModeGameOnly InputMode;
+    FInputModeGameAndUI InputMode;
+    InputMode.SetHideCursorDuringCapture(false);
     SetInputMode(InputMode);
     ResetGame();
+    GameState = ERetroGameState::Title;
+    bShowMouseCursor = true;
 }
 
 void ARetroInvadersPlayerController::ResetGame(bool bKeepScore)
@@ -40,8 +44,21 @@ void ARetroInvadersPlayerController::ResetGame(bool bKeepScore)
     EnemyStepTimer = 0.0f;
     EnemyShotTimer = 0.5f;
     MarchTimer = 0.0f;
+    bUfoActive = false;
+    UfoX = -60.0f;
+    UfoSpawnTimer = FMath::FRandRange(10.0f, 18.0f);
+    UfoSoundTimer = 0.0f;
+    UfoScoreTimer = 0.0f;
     BuildWave();
     BuildBunkers();
+}
+
+void ARetroInvadersPlayerController::StartPlayingFromTitle()
+{
+    ResetGame();
+    bShowMouseCursor = false;
+    FInputModeGameOnly InputMode;
+    SetInputMode(InputMode);
 }
 
 void ARetroInvadersPlayerController::BuildWave()
@@ -54,7 +71,8 @@ void ARetroInvadersPlayerController::BuildWave()
         for (int32 Column = 0; Column < Columns; ++Column)
         {
             FRetroInvader Invader;
-            Invader.Position = FVector2D(145.0f + Column * 51.0f, 105.0f + Row * 42.0f);
+            const float WaveDrop = FMath::Min(36.0f, static_cast<float>(Wave - 1) * 6.0f);
+            Invader.Position = FVector2D(145.0f + Column * 51.0f, 105.0f + Row * 42.0f + WaveDrop);
             Invader.Type = Row == 0 ? 2 : Row < 3 ? 1 : 0;
             Invaders.Add(Invader);
         }
@@ -113,10 +131,68 @@ void ARetroInvadersPlayerController::PlayerTick(float DeltaTime)
     }
     bPreviousQuit = bQuit;
 
+    const bool bToggleFullscreen = IsInputKeyDown(EKeys::F11);
+    if (bToggleFullscreen && !bPreviousFullscreen)
+    {
+        if (UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr)
+        {
+            const bool bWindowed = Settings->GetFullscreenMode() == EWindowMode::Windowed;
+            Settings->SetFullscreenMode(bWindowed ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed);
+            if (!bWindowed) Settings->SetScreenResolution(FIntPoint(1280, 720));
+            Settings->ApplySettings(false);
+        }
+    }
+    bPreviousFullscreen = bToggleFullscreen;
+
+    const bool bStart = IsInputKeyDown(EKeys::Enter) || IsInputKeyDown(EKeys::SpaceBar);
+    const bool bMouse = IsInputKeyDown(EKeys::LeftMouseButton);
+    if (GameState == ERetroGameState::Title)
+    {
+        bool bClickedStart = false;
+        if (bMouse && !bPreviousMouse)
+        {
+            float MouseX = 0.0f;
+            float MouseY = 0.0f;
+            int32 ViewWidth = 0;
+            int32 ViewHeight = 0;
+            GetViewportSize(ViewWidth, ViewHeight);
+            if (GetMousePosition(MouseX, MouseY) && ViewWidth > 0 && ViewHeight > 0)
+            {
+                const float Scale = FMath::Min(ViewWidth / 800.0f, ViewHeight / 600.0f);
+                const float OffsetX = (ViewWidth - 800.0f * Scale) * 0.5f;
+                const float OffsetY = (ViewHeight - 600.0f * Scale) * 0.5f;
+                const float LogicalX = (MouseX - OffsetX) / Scale;
+                const float LogicalY = (MouseY - OffsetY) / Scale;
+                bClickedStart = LogicalX >= 300.0f && LogicalX <= 500.0f &&
+                                LogicalY >= 345.0f && LogicalY <= 400.0f;
+            }
+        }
+
+        if ((bStart && !bPreviousRestart) || bClickedStart)
+        {
+            StartPlayingFromTitle();
+            bPreviousFire = bStart;
+        }
+        bPreviousRestart = bStart;
+        bPreviousMouse = bMouse;
+        return;
+    }
+
     const bool bRestart = IsInputKeyDown(EKeys::R) || IsInputKeyDown(EKeys::Enter);
     if (GameState != ERetroGameState::Playing)
     {
-        if (bRestart && !bPreviousRestart) ResetGame();
+        if (bRestart && !bPreviousRestart)
+        {
+            if (GameState == ERetroGameState::Victory)
+            {
+                ++Wave;
+                ResetGame(true);
+            }
+            else
+            {
+                ResetGame();
+            }
+        }
         bPreviousRestart = bRestart;
         return;
     }
@@ -136,11 +212,49 @@ void ARetroInvadersPlayerController::PlayerTick(float DeltaTime)
 
     UpdateBullets(DeltaTime);
     UpdateInvaders(DeltaTime);
+    UpdateUfo(DeltaTime);
     ResolveCollisions();
+}
+
+void ARetroInvadersPlayerController::UpdateUfo(float DeltaTime)
+{
+    UfoScoreTimer = FMath::Max(0.0f, UfoScoreTimer - DeltaTime);
+    if (!bUfoActive)
+    {
+        UfoSpawnTimer -= DeltaTime;
+        if (UfoSpawnTimer <= 0.0f)
+        {
+            bUfoActive = true;
+            UfoX = -45.0f;
+            UfoSoundTimer = 0.0f;
+            UfoSoundNote = 0;
+        }
+        return;
+    }
+
+    UfoX += (115.0f + Wave * 5.0f) * DeltaTime;
+    UfoSoundTimer -= DeltaTime;
+    if (UfoSoundTimer <= 0.0f)
+    {
+        PlayUfoSound();
+        UfoSoundTimer = 0.18f;
+    }
+
+    if (UfoX > 845.0f)
+    {
+        bUfoActive = false;
+        UfoSpawnTimer = FMath::FRandRange(12.0f, 22.0f);
+    }
 }
 
 void ARetroInvadersPlayerController::FirePlayerBullet()
 {
+    // The original-style cannon allows only one player shot on screen.
+    for (const FRetroBullet& ExistingBullet : Bullets)
+    {
+        if (!ExistingBullet.bEnemy) return;
+    }
+
     FRetroBullet Bullet;
     Bullet.Position = FVector2D(PlayerX, RetroRules::PlayerY - 18.0f);
     Bullet.bEnemy = false;
@@ -202,40 +316,39 @@ void ARetroInvadersPlayerController::UpdateInvaders(float DeltaTime)
     }
 
     const float SpeedFactor = 1.0f + (55 - Alive) * 0.045f + (Wave - 1) * 0.18f;
-    const float MarchInterval = FMath::Max(0.075f, 0.52f / SpeedFactor);
-    MarchTimer += DeltaTime;
-    if (MarchTimer >= MarchInterval)
+    const float StepInterval = FMath::Max(0.065f, 0.52f / SpeedFactor);
+    EnemyStepTimer -= DeltaTime;
+    if (EnemyStepTimer <= 0.0f)
     {
-        MarchTimer = 0.0f;
+        EnemyStepTimer += StepInterval;
+        const float StepX = EnemyDirection * 8.0f;
+        bool bHitEdge = false;
+        for (const FRetroInvader& Invader : Invaders)
+        {
+            if (Invader.bAlive &&
+                (Invader.Position.X + StepX < 38.0f || Invader.Position.X + StepX > 762.0f))
+            {
+                bHitEdge = true;
+                break;
+            }
+        }
+
+        if (bHitEdge)
+        {
+            EnemyDirection *= -1.0f;
+            for (FRetroInvader& Invader : Invaders)
+            {
+                if (Invader.bAlive) Invader.Position.Y += 15.0f;
+            }
+        }
+        else
+        {
+            for (FRetroInvader& Invader : Invaders)
+            {
+                if (Invader.bAlive) Invader.Position.X += StepX;
+            }
+        }
         PlayMarchSound();
-    }
-
-    bool bHitEdge = false;
-    const float DeltaX = EnemyDirection * 34.0f * SpeedFactor * DeltaTime;
-    for (FRetroInvader& Invader : Invaders)
-    {
-        if (!Invader.bAlive) continue;
-        if (Invader.Position.X + DeltaX < 38.0f || Invader.Position.X + DeltaX > 762.0f)
-        {
-            bHitEdge = true;
-            break;
-        }
-    }
-
-    if (bHitEdge)
-    {
-        EnemyDirection *= -1.0f;
-        for (FRetroInvader& Invader : Invaders)
-        {
-            if (Invader.bAlive) Invader.Position.Y += 15.0f;
-        }
-    }
-    else
-    {
-        for (FRetroInvader& Invader : Invaders)
-        {
-            if (Invader.bAlive) Invader.Position.X += DeltaX;
-        }
     }
 
     EnemyShotTimer -= DeltaTime;
@@ -267,6 +380,22 @@ void ARetroInvadersPlayerController::ResolveCollisions()
         {
             Bullets.RemoveAtSwap(BulletIndex);
             PlayTone(150.0f, 90.0f, 0.045f, 0.055f);
+            continue;
+        }
+
+        if (!Bullet.bEnemy && bUfoActive &&
+            FMath::Abs(Bullet.Position.X - UfoX) < 30.0f &&
+            FMath::Abs(Bullet.Position.Y - UfoY) < 16.0f)
+        {
+            const int32 Bonuses[] = { 50, 100, 150, 300 };
+            LastUfoScore = Bonuses[FMath::RandRange(0, 3)];
+            Score += LastUfoScore;
+            HighScore = FMath::Max(HighScore, Score);
+            UfoScoreTimer = 1.2f;
+            bUfoActive = false;
+            UfoSpawnTimer = FMath::FRandRange(14.0f, 24.0f);
+            Bullets.RemoveAtSwap(BulletIndex);
+            PlayExplosionSound();
             continue;
         }
 
@@ -409,4 +538,11 @@ void ARetroInvadersPlayerController::PlayMarchSound()
 void ARetroInvadersPlayerController::PlayEnemyShotSound()
 {
     PlayTone(240.0f, 520.0f, 0.16f, 0.10f);
+}
+
+void ARetroInvadersPlayerController::PlayUfoSound()
+{
+    const float Frequency = UfoSoundNote == 0 ? 310.0f : 390.0f;
+    PlayTone(Frequency, Frequency + 35.0f, 0.14f, 0.065f);
+    UfoSoundNote = 1 - UfoSoundNote;
 }
