@@ -6,6 +6,12 @@ Unreal Engine 5.5とC++で制作した、レトロな固定画面シューティ
 
 ![Retro Invadersのゲーム画面](docs/RetroInvaders.png)
 
+## 紹介動画
+
+[![Retro Invaders 30秒ゲーム紹介](https://img.youtube.com/vi/GmzlHmN2rwk/maxresdefault.jpg)](https://www.youtube.com/watch?v=GmzlHmN2rwk)
+
+[YouTubeで動画を見る](https://www.youtube.com/watch?v=GmzlHmN2rwk)
+
 ## ダウンロード
 
 [GitHub ReleasesからWindows版をダウンロード](https://github.com/tamtam19641002-jpn/retro-invaders-ue5/releases/latest)
@@ -71,5 +77,7 @@ ZIPを展開し、`Windows/RetroInvaders.exe`を実行してください。`exe`
 ## English
 
 Retro Invaders is an original fixed-screen shooter built with Unreal Engine 5.5 and C++. It uses HUD primitives for its pixel-art presentation and synthesizes all arcade sound effects at runtime. No external art or audio assets are included.
+
+[Watch the gameplay video on YouTube](https://www.youtube.com/watch?v=GmzlHmN2rwk)
 
 See the Japanese sections above for controls, requirements, and build instructions.
