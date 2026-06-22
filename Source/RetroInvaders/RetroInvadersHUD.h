@@ -25,6 +25,7 @@ private:
     void Pixel(float X, float Y, float W, float H, const FLinearColor& Color);
     void DrawPlayer(float X, float Y);
     void DrawInvader(float X, float Y, int32 Type, int32 Frame);
+    void DrawUfo(float X, float Y);
     void DrawBunker(const FRetroBunker& Bunker);
     void DrawCentered(const FString& Text, float Y, float Scale, const FLinearColor& Color);
 };
