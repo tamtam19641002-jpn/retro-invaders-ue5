@@ -19,6 +19,16 @@ struct FRetroBullet
     bool bEnemy = false;
 };
 
+struct FRetroBunker
+{
+    static constexpr int32 Columns = 14;
+    static constexpr int32 Rows = 8;
+    static constexpr float CellSize = 5.0f;
+
+    FVector2D Position = FVector2D::ZeroVector;
+    TArray<uint8> Cells;
+};
+
 UENUM()
 enum class ERetroGameState : uint8
 {
@@ -44,6 +54,7 @@ public:
     int32 Wave = 1;
     TArray<FRetroInvader> Invaders;
     TArray<FRetroBullet> Bullets;
+    TArray<FRetroBunker> Bunkers;
     ERetroGameState GameState = ERetroGameState::Playing;
 
     int32 GetAliveCount() const;
@@ -64,11 +75,13 @@ private:
 
     void ResetGame(bool bKeepScore = false);
     void BuildWave();
+    void BuildBunkers();
     void FirePlayerBullet();
     void FireEnemyBullet();
     void UpdateBullets(float DeltaTime);
     void UpdateInvaders(float DeltaTime);
     void ResolveCollisions();
+    bool DamageBunkerAt(const FVector2D& HitPosition, bool bEnemyBullet);
     void PlayTone(float StartFrequency, float EndFrequency, float Duration, float Volume, bool bNoise = false);
     void PlayShotSound();
     void PlayExplosionSound();
