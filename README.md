@@ -6,6 +6,12 @@ Unreal Engine 5.5とC++で制作した、レトロな固定画面シューティ
 
 ![Retro Invadersのゲーム画面](docs/RetroInvaders.png)
 
+## ダウンロード
+
+[GitHub ReleasesからWindows版をダウンロード](https://github.com/tamtam19641002-jpn/retro-invaders-ue5/releases/latest)
+
+ZIPを展開し、`Windows/RetroInvaders.exe`を実行してください。`exe`単体では動作しないため、展開後のフォルダー構成を維持してください。
+
 ## 特徴
 
 - 55体の敵による移動編隊
