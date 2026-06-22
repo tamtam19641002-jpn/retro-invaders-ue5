@@ -46,12 +46,24 @@ void ARetroInvadersHUD::DrawInvader(float X, float Y, int32 Type, int32 Frame)
     }
 }
 
-void ARetroInvadersHUD::DrawBunker(float X, float Y)
+void ARetroInvadersHUD::DrawBunker(const FRetroBunker& Bunker)
 {
     const FLinearColor Green(0.20f, 0.85f, 0.28f);
-    Pixel(X - 28, Y - 12, 56, 8, Green);
-    Pixel(X - 34, Y - 4, 68, 18, Green);
-    Pixel(X - 12, Y + 7, 24, 10, FLinearColor::Black);
+    const float Left = Bunker.Position.X - FRetroBunker::Columns * FRetroBunker::CellSize * 0.5f;
+    const float Top = Bunker.Position.Y - FRetroBunker::Rows * FRetroBunker::CellSize * 0.5f;
+    for (int32 Row = 0; Row < FRetroBunker::Rows; ++Row)
+    {
+        for (int32 Column = 0; Column < FRetroBunker::Columns; ++Column)
+        {
+            const int32 Index = Row * FRetroBunker::Columns + Column;
+            if (Bunker.Cells.IsValidIndex(Index) && Bunker.Cells[Index] != 0)
+            {
+                Pixel(Left + Column * FRetroBunker::CellSize,
+                      Top + Row * FRetroBunker::CellSize,
+                      FRetroBunker::CellSize, FRetroBunker::CellSize, Green);
+            }
+        }
+    }
 }
 
 void ARetroInvadersHUD::DrawCentered(const FString& Text, float Y, float TextScale, const FLinearColor& Color)
@@ -95,10 +107,10 @@ void ARetroInvadersHUD::DrawHUD()
         if (Invader.bAlive) DrawInvader(Invader.Position.X, Invader.Position.Y, Invader.Type, AnimationFrame);
     }
 
-    DrawBunker(145, 475);
-    DrawBunker(315, 475);
-    DrawBunker(485, 475);
-    DrawBunker(655, 475);
+    for (const FRetroBunker& Bunker : Game->Bunkers)
+    {
+        DrawBunker(Bunker);
+    }
     DrawPlayer(Game->PlayerX, 545);
 
     for (const FRetroBullet& Bullet : Game->Bullets)

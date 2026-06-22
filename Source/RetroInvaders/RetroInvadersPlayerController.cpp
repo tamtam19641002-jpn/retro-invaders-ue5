@@ -41,6 +41,7 @@ void ARetroInvadersPlayerController::ResetGame(bool bKeepScore)
     EnemyShotTimer = 0.5f;
     MarchTimer = 0.0f;
     BuildWave();
+    BuildBunkers();
 }
 
 void ARetroInvadersPlayerController::BuildWave()
@@ -57,6 +58,37 @@ void ARetroInvadersPlayerController::BuildWave()
             Invader.Type = Row == 0 ? 2 : Row < 3 ? 1 : 0;
             Invaders.Add(Invader);
         }
+    }
+}
+
+void ARetroInvadersPlayerController::BuildBunkers()
+{
+    Bunkers.Reset();
+    const float Centers[] = { 145.0f, 315.0f, 485.0f, 655.0f };
+
+    for (const float CenterX : Centers)
+    {
+        FRetroBunker Bunker;
+        Bunker.Position = FVector2D(CenterX, 475.0f);
+        Bunker.Cells.SetNumZeroed(FRetroBunker::Columns * FRetroBunker::Rows);
+
+        for (int32 Row = 0; Row < FRetroBunker::Rows; ++Row)
+        {
+            for (int32 Column = 0; Column < FRetroBunker::Columns; ++Column)
+            {
+                bool bSolid = false;
+                if (Row == 0) bSolid = Column >= 4 && Column <= 9;
+                else if (Row == 1) bSolid = Column >= 2 && Column <= 11;
+                else if (Row == 2) bSolid = Column >= 1 && Column <= 12;
+                else bSolid = true;
+
+                // Carve the opening under the shield.
+                if (Row >= 5 && Column >= 5 && Column <= 8) bSolid = false;
+                if (Row == 7 && Column >= 4 && Column <= 9) bSolid = false;
+                Bunker.Cells[Row * FRetroBunker::Columns + Column] = bSolid ? 1 : 0;
+            }
+        }
+        Bunkers.Add(MoveTemp(Bunker));
     }
 }
 
@@ -231,6 +263,13 @@ void ARetroInvadersPlayerController::ResolveCollisions()
     for (int32 BulletIndex = Bullets.Num() - 1; BulletIndex >= 0; --BulletIndex)
     {
         FRetroBullet& Bullet = Bullets[BulletIndex];
+        if (DamageBunkerAt(Bullet.Position, Bullet.bEnemy))
+        {
+            Bullets.RemoveAtSwap(BulletIndex);
+            PlayTone(150.0f, 90.0f, 0.045f, 0.055f);
+            continue;
+        }
+
         if (Bullet.bEnemy)
         {
             if (FMath::Abs(Bullet.Position.X - PlayerX) < 25.0f &&
@@ -264,6 +303,48 @@ void ARetroInvadersPlayerController::ResolveCollisions()
         }
         if (bDestroyed) Bullets.RemoveAtSwap(BulletIndex);
     }
+}
+
+bool ARetroInvadersPlayerController::DamageBunkerAt(const FVector2D& HitPosition, bool bEnemyBullet)
+{
+    for (FRetroBunker& Bunker : Bunkers)
+    {
+        const float Left = Bunker.Position.X - FRetroBunker::Columns * FRetroBunker::CellSize * 0.5f;
+        const float Top = Bunker.Position.Y - FRetroBunker::Rows * FRetroBunker::CellSize * 0.5f;
+        const int32 Column = FMath::FloorToInt((HitPosition.X - Left) / FRetroBunker::CellSize);
+        const int32 Row = FMath::FloorToInt((HitPosition.Y - Top) / FRetroBunker::CellSize);
+
+        if (Column < 0 || Column >= FRetroBunker::Columns || Row < 0 || Row >= FRetroBunker::Rows)
+        {
+            continue;
+        }
+
+        const int32 HitIndex = Row * FRetroBunker::Columns + Column;
+        if (!Bunker.Cells.IsValidIndex(HitIndex) || Bunker.Cells[HitIndex] == 0)
+        {
+            continue;
+        }
+
+        const int32 Direction = bEnemyBullet ? 1 : -1;
+        const FIntPoint Crater[] = {
+            FIntPoint(0, 0), FIntPoint(-1, 0), FIntPoint(1, 0),
+            FIntPoint(0, Direction), FIntPoint(-1, Direction), FIntPoint(1, Direction),
+            FIntPoint(0, -Direction)
+        };
+
+        for (const FIntPoint& Offset : Crater)
+        {
+            const int32 DamageColumn = Column + Offset.X;
+            const int32 DamageRow = Row + Offset.Y;
+            if (DamageColumn >= 0 && DamageColumn < FRetroBunker::Columns &&
+                DamageRow >= 0 && DamageRow < FRetroBunker::Rows)
+            {
+                Bunker.Cells[DamageRow * FRetroBunker::Columns + DamageColumn] = 0;
+            }
+        }
+        return true;
+    }
+    return false;
 }
 
 void ARetroInvadersPlayerController::PlayTone(float StartFrequency, float EndFrequency, float Duration, float Volume, bool bNoise)
